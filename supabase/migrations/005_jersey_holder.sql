@@ -1,0 +1,2 @@
+ALTER TABLE teams
+  ADD COLUMN IF NOT EXISTS jersey_holder_id uuid REFERENCES users(id) ON DELETE SET NULL;

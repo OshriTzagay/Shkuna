@@ -1,0 +1,19 @@
+{
+  "name": "@shkuna/utils",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./shuffle": "./src/shuffle.ts",
+    "./invite": "./src/invite.ts",
+    "./elo": "./src/elo.ts",
+    "./format": "./src/format.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}
