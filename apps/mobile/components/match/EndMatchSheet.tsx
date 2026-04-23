@@ -1,9 +1,25 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Modal, Alert } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  Modal,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { getPointsDelta } from "@shkuna/utils";
 import type { MatchRegistration } from "@shkuna/db";
+import { useTheme } from "@/hooks/useTheme";
+import {
+  Card,
+  Button,
+  Avatar,
+  PressableScale,
+  TabSwitcher,
+} from "@/components/ui";
 
 interface RegWithUser extends MatchRegistration {
   user: { id: string; full_name: string; nickname: string | null };
@@ -24,8 +40,16 @@ interface Props {
   onDone: () => void;
 }
 
-export default function EndMatchSheet({ matchId, teamId, players, teams, onClose, onDone }: Props) {
-  const [winner, setWinner] = useState<string | null>(null); // team letter or "draw"
+export default function EndMatchSheet({
+  matchId,
+  teamId,
+  players,
+  teams,
+  onClose,
+  onDone,
+}: Props) {
+  const { colors } = useTheme();
+  const [winner, setWinner] = useState<string | null>(null);
   const [mvpId, setMvpId] = useState<string | null>(null);
   const [lowId, setLowId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,7 +59,6 @@ export default function EndMatchSheet({ matchId, teamId, players, teams, onClose
 
   async function handleFinish() {
     setLoading(true);
-
     await supabase.from("match_results").upsert({
       match_id: matchId,
       mvp_user_id: mvpId,
@@ -48,15 +71,29 @@ export default function EndMatchSheet({ matchId, teamId, players, teams, onClose
 
     if (winner && winner !== "draw") {
       const delta = getPointsDelta("win");
-      const { data: team } = await supabase.from("teams").select("total_points").eq("id", teamId).single();
+      const { data: team } = await supabase
+        .from("teams")
+        .select("total_points")
+        .eq("id", teamId)
+        .single();
       if (team) {
-        await supabase.from("teams").update({ total_points: (team.total_points ?? 0) + delta }).eq("id", teamId);
+        await supabase
+          .from("teams")
+          .update({ total_points: (team.total_points ?? 0) + delta })
+          .eq("id", teamId);
       }
     } else if (winner === "draw") {
       const delta = getPointsDelta("draw");
-      const { data: team } = await supabase.from("teams").select("total_points").eq("id", teamId).single();
+      const { data: team } = await supabase
+        .from("teams")
+        .select("total_points")
+        .eq("id", teamId)
+        .single();
       if (team) {
-        await supabase.from("teams").update({ total_points: (team.total_points ?? 0) + delta }).eq("id", teamId);
+        await supabase
+          .from("teams")
+          .update({ total_points: (team.total_points ?? 0) + delta })
+          .eq("id", teamId);
       }
     }
 
@@ -66,120 +103,239 @@ export default function EndMatchSheet({ matchId, teamId, players, teams, onClose
   }
 
   return (
-    <Modal animationType="slide" presentationStyle="pageSheet" visible>
-      <View className="flex-1 bg-white">
-        {/* Header */}
-        <View className="flex-row-reverse justify-between items-center px-6 pt-8 pb-4 border-b border-gray-100">
-          <Text className="text-2xl font-bold">סיום משחק 🏁</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
+    <Modal animationType="slide" presentationStyle="pageSheet" visible onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          {/* Header */}
+          <View
+            style={{
+              paddingTop: 18,
+              paddingHorizontal: 22,
+              paddingBottom: 14,
+              flexDirection: "row-reverse",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: "800" }}>
+              סיום משחק 🏁
+            </Text>
+            <PressableScale onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </PressableScale>
+          </View>
 
-        {/* Step tabs */}
-        <View className="flex-row border-b border-gray-100">
-          {(["result", "mvp"] as const).map((s, i) => (
-            <TouchableOpacity
-              key={s}
-              className={`flex-1 py-3 items-center border-b-2 ${step === s ? "border-primary-600" : "border-transparent"}`}
-              onPress={() => setStep(s)}
-            >
-              <Text className={`text-sm font-medium ${step === s ? "text-primary-600" : "text-gray-400"}`}>
-                {i === 0 ? "תוצאה" : "מצטיין"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <View style={{ paddingHorizontal: 22, paddingTop: 12 }}>
+            <TabSwitcher
+              value={step}
+              options={[
+                { id: "result", label: "תוצאה" },
+                { id: "mvp", label: "מצטיין" },
+              ]}
+              onChange={(v) => setStep(v as any)}
+            />
+          </View>
 
-        <ScrollView className="flex-1 px-6 pt-6">
-
-          {/* Step 1: Winner — dynamic teams */}
-          {step === "result" && (
-            <View>
-              <Text className="text-gray-700 font-semibold text-right mb-4">מי ניצח?</Text>
-
-              {teams.map((team) => (
-                <TouchableOpacity
-                  key={team.letter}
+          <ScrollView
+            contentContainerStyle={{ padding: 22, paddingTop: 18, gap: 12, paddingBottom: 60 }}
+          >
+            {step === "result" && (
+              <>
+                <Text
                   style={{
-                    backgroundColor: winner === team.letter ? team.bg : "#f9fafb",
-                    borderColor: winner === team.letter ? team.border : "#e5e7eb",
-                    borderWidth: 2,
-                    borderRadius: 14,
-                    paddingVertical: 16,
-                    alignItems: "center",
-                    marginBottom: 10,
+                    color: colors.textPrimary,
+                    fontWeight: "800",
+                    textAlign: "right",
+                    fontSize: 15,
+                    marginBottom: 4,
                   }}
-                  onPress={() => setWinner(team.letter)}
                 >
-                  <Text style={{ color: winner === team.letter ? team.text : "#374151", fontWeight: "700", fontSize: 16 }}>
-                    {winner === team.letter ? "✓ " : ""}קבוצה {team.name} ניצחה
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              <TouchableOpacity
-                className={`rounded-xl py-4 items-center mb-4 border-2 ${winner === "draw" ? "bg-gray-100 border-gray-400" : "bg-white border-gray-200"}`}
-                onPress={() => setWinner("draw")}
-              >
-                <Text className={`font-bold text-base ${winner === "draw" ? "text-gray-800" : "text-gray-500"}`}>
-                  {winner === "draw" ? "✓ " : ""}🤝 תיקו
+                  מי ניצח?
                 </Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                className="mt-2 bg-primary-600 rounded-xl py-3 items-center"
-                onPress={() => setStep("mvp")}
-              >
-                <Text className="text-white font-bold">הבא →</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                {teams.map((team) => {
+                  const active = winner === team.letter;
+                  return (
+                    <PressableScale key={team.letter} onPress={() => setWinner(team.letter)}>
+                      <View
+                        style={{
+                          backgroundColor: active ? team.bg : colors.bgSurface,
+                          borderColor: active ? team.border : colors.border,
+                          borderWidth: 2,
+                          borderRadius: 16,
+                          paddingVertical: 16,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: active ? team.text : colors.textPrimary,
+                            fontWeight: "800",
+                            fontSize: 16,
+                          }}
+                        >
+                          {active ? "✓ " : ""}קבוצה {team.name} ניצחה
+                        </Text>
+                      </View>
+                    </PressableScale>
+                  );
+                })}
 
-          {/* Step 2: MVP + שחקן שפל */}
-          {step === "mvp" && (
-            <View>
-              <Text className="text-gray-700 font-bold text-right mb-4">🏅 מצטיין המשחק</Text>
-              {players.map((p) => (
-                <TouchableOpacity
-                  key={`mvp-${p.user_id}`}
-                  className={`flex-row-reverse items-center p-3 rounded-xl mb-2 ${mvpId === p.user_id ? "bg-yellow-50 border border-yellow-400" : "bg-gray-50"}`}
-                  onPress={() => setMvpId(mvpId === p.user_id ? null : p.user_id)}
+                <PressableScale onPress={() => setWinner("draw")}>
+                  <View
+                    style={{
+                      backgroundColor: winner === "draw" ? colors.bgSubtle : colors.bgSurface,
+                      borderColor: winner === "draw" ? colors.borderStrong : colors.border,
+                      borderWidth: 2,
+                      borderRadius: 16,
+                      paddingVertical: 16,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: winner === "draw" ? colors.textPrimary : colors.textSecondary,
+                        fontWeight: "800",
+                        fontSize: 15,
+                      }}
+                    >
+                      {winner === "draw" ? "✓ " : ""}🤝 תיקו
+                    </Text>
+                  </View>
+                </PressableScale>
+
+                <Button
+                  label="הבא"
+                  iconRight="arrow-back"
+                  size="lg"
+                  onPress={() => setStep("mvp")}
+                />
+              </>
+            )}
+
+            {step === "mvp" && (
+              <>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontWeight: "800",
+                    textAlign: "right",
+                    fontSize: 15,
+                    marginBottom: 4,
+                  }}
                 >
-                  <Text className="text-2xl ml-3">{mvpId === p.user_id ? "🏅" : "👤"}</Text>
-                  <Text className="text-gray-900 font-medium">{dn(p)}</Text>
-                </TouchableOpacity>
-              ))}
+                  🏅 מצטיין המשחק
+                </Text>
+                {players.map((p) => {
+                  const active = mvpId === p.user_id;
+                  return (
+                    <PressableScale
+                      key={`mvp-${p.user_id}`}
+                      onPress={() => setMvpId(active ? null : p.user_id)}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row-reverse",
+                          alignItems: "center",
+                          padding: 12,
+                          borderRadius: 14,
+                          backgroundColor: active ? colors.warningDim : colors.bgSurface,
+                          borderWidth: 1,
+                          borderColor: active ? colors.warning + "55" : colors.border,
+                          gap: 12,
+                        }}
+                      >
+                        <Avatar name={p.user.full_name} size={36} tone="neutral" />
+                        <Text
+                          style={{
+                            color: active ? colors.warning : colors.textPrimary,
+                            fontWeight: active ? "800" : "600",
+                            flex: 1,
+                            textAlign: "right",
+                          }}
+                        >
+                          {dn(p)}
+                        </Text>
+                        {active && <Text style={{ fontSize: 22 }}>🏅</Text>}
+                      </View>
+                    </PressableScale>
+                  );
+                })}
 
-              <Text className="text-gray-700 font-bold text-right mt-6 mb-4">💩 שחקן שפל (רשות)</Text>
-              {players.map((p) => (
-                <TouchableOpacity
-                  key={`low-${p.user_id}`}
-                  className={`flex-row-reverse items-center p-3 rounded-xl mb-2 ${lowId === p.user_id ? "bg-red-50 border border-red-300" : "bg-gray-50"}`}
-                  onPress={() => setLowId(lowId === p.user_id ? null : p.user_id)}
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontWeight: "800",
+                    textAlign: "right",
+                    fontSize: 15,
+                    marginTop: 12,
+                    marginBottom: 4,
+                  }}
                 >
-                  <Text className="text-2xl ml-3">{lowId === p.user_id ? "💩" : "👤"}</Text>
-                  <Text className="text-gray-900 font-medium">{dn(p)}</Text>
-                </TouchableOpacity>
-              ))}
+                  💩 שחקן שפל (רשות)
+                </Text>
+                {players.map((p) => {
+                  const active = lowId === p.user_id;
+                  return (
+                    <PressableScale
+                      key={`low-${p.user_id}`}
+                      onPress={() => setLowId(active ? null : p.user_id)}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row-reverse",
+                          alignItems: "center",
+                          padding: 12,
+                          borderRadius: 14,
+                          backgroundColor: active ? colors.errorDim : colors.bgSurface,
+                          borderWidth: 1,
+                          borderColor: active ? colors.error + "55" : colors.border,
+                          gap: 12,
+                        }}
+                      >
+                        <Avatar name={p.user.full_name} size={36} tone="neutral" />
+                        <Text
+                          style={{
+                            color: active ? colors.error : colors.textPrimary,
+                            fontWeight: active ? "800" : "600",
+                            flex: 1,
+                            textAlign: "right",
+                          }}
+                        >
+                          {dn(p)}
+                        </Text>
+                        {active && <Text style={{ fontSize: 22 }}>💩</Text>}
+                      </View>
+                    </PressableScale>
+                  );
+                })}
 
-              {/* AI placeholder */}
-              <View className="bg-purple-50 border border-purple-200 rounded-2xl p-4 my-4 items-center">
-                <Text className="text-2xl mb-1">🤖</Text>
-                <Text className="text-purple-700 font-bold mb-1">סיכום AI — בקרוב!</Text>
-                <Text className="text-purple-500 text-sm text-center">כתבה קומית שתצחיק את כל השכונה</Text>
-              </View>
+                <Card variant="tinted" padding={16} style={{ alignItems: "center", marginTop: 8 }}>
+                  <Text style={{ fontSize: 24, marginBottom: 4 }}>🤖</Text>
+                  <Text style={{ color: colors.primary, fontWeight: "800", marginBottom: 2 }}>
+                    סיכום AI — בקרוב!
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: "center" }}>
+                    כתבה קומית שתצחיק את כל השכונה
+                  </Text>
+                </Card>
 
-              <TouchableOpacity
-                className="bg-red-500 rounded-xl py-4 items-center mb-8"
-                onPress={handleFinish}
-                disabled={loading}
-              >
-                <Text className="text-white font-bold text-lg">{loading ? "שומר..." : "סיים משחק 🏁"}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </ScrollView>
+                <Button
+                  label={loading ? "שומר..." : "סיים משחק 🏁"}
+                  variant="danger"
+                  size="lg"
+                  loading={loading}
+                  onPress={handleFinish}
+                />
+              </>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

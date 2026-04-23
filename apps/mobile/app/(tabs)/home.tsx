@@ -3,14 +3,27 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/store/auth";
 import { supabase } from "@/lib/supabase";
 import { formatMatchDate } from "@shkuna/utils";
 import type { Match, Team } from "@shkuna/db";
+import { useTheme } from "@/hooks/useTheme";
+import {
+  Screen,
+  HeroHeader,
+  Card,
+  Button,
+  Avatar,
+  Badge,
+  EmptyState,
+  SectionTitle,
+  PressableScale,
+  FadeInUp,
+} from "@/components/ui";
 
 interface NextMatch extends Match {
   team: Team;
@@ -18,15 +31,16 @@ interface NextMatch extends Match {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { profile } = useAuthStore();
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [myTeams, setMyTeams] = useState<Team[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   async function load() {
     if (!profile) return;
 
-    // fetch teams I'm in
     const { data: memberships } = await supabase
       .from("team_members")
       .select("team_id, teams(*)")
@@ -38,9 +52,12 @@ export default function HomeScreen() {
       .filter(Boolean);
     setMyTeams(teams);
 
-    if (teams.length === 0) return;
+    if (teams.length === 0) {
+      setNextMatch(null);
+      setLoaded(true);
+      return;
+    }
 
-    // find next match across all my teams
     const teamIds = teams.map((t) => t.id);
     const { data: matches } = await supabase
       .from("matches")
@@ -52,9 +69,12 @@ export default function HomeScreen() {
       .limit(1);
 
     setNextMatch((matches?.[0] as NextMatch) ?? null);
+    setLoaded(true);
   }
 
-  useEffect(() => { load(); }, [profile]);
+  useEffect(() => {
+    load();
+  }, [profile]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -65,88 +85,192 @@ export default function HomeScreen() {
   const displayName = profile?.nickname ?? profile?.full_name ?? "שחקן";
 
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Header */}
-      <View className="bg-primary-600 pt-14 pb-8 px-6">
-        <Text className="text-white text-base opacity-80">שלום,</Text>
-        <Text className="text-white text-3xl font-bold">{displayName} ⚽</Text>
-      </View>
-
-      <View className="px-4 -mt-4">
-        {/* Next match card */}
-        {nextMatch ? (
-          <TouchableOpacity
-            className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100"
-            onPress={() => router.push(`/match/${nextMatch.id}`)}
-          >
-            <Text className="text-gray-500 text-xs mb-1 text-right">המשחק הבא שלך</Text>
-            <Text className="text-gray-900 text-xl font-bold text-right mb-1">
-              {nextMatch.title}
-            </Text>
-            <Text className="text-primary-600 font-medium text-right">
-              {formatMatchDate(nextMatch.scheduled_at)}
-            </Text>
-            <Text className="text-gray-500 text-sm text-right mt-1">
-              📍 {nextMatch.pitch_name}
-            </Text>
-            <View className="bg-primary-50 rounded-xl px-4 py-2 mt-3 items-center">
-              <Text className="text-primary-700 font-medium">לפרטי המשחק ←</Text>
+    <Screen>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 30 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
+        <HeroHeader
+          subtitle="שלום שחקן,"
+          title={displayName + " ⚽"}
+          rightSlot={
+            <View style={{ flexDirection: "row-reverse" }}>
+              <Avatar name={displayName} size={42} />
             </View>
-          </TouchableOpacity>
-        ) : (
-          <View className="bg-white rounded-2xl p-5 mb-4 border border-gray-100 items-center">
-            <Text className="text-4xl mb-2">😴</Text>
-            <Text className="text-gray-500">אין משחקים קרובים</Text>
-          </View>
-        )}
+          }
+        />
 
-        {/* My teams */}
-        {myTeams.length > 0 ? (
-          <View className="bg-white rounded-2xl p-4 mb-4 border border-gray-100">
-            <Text className="text-gray-900 font-bold text-base mb-3 text-right">
-              הקבוצות שלי
-            </Text>
-            {myTeams.map((team) => (
-              <TouchableOpacity
-                key={team.id}
-                className="flex-row-reverse items-center py-3 border-b border-gray-50 last:border-0"
-                onPress={() => router.push(`/team/${team.id}`)}
-              >
-                <View className="w-10 h-10 bg-primary-100 rounded-full items-center justify-center ml-3">
-                  <Text className="text-primary-600 font-bold">
-                    {team.name.charAt(0)}
+        <View style={{ paddingHorizontal: 16, marginTop: -18, gap: 14 }}>
+          {/* ── Next match ── */}
+          <FadeInUp delay={50}>
+            {nextMatch ? (
+              <PressableScale onPress={() => router.push(`/match/${nextMatch.id}`)}>
+                <Card variant="elevated" glow padding={18}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      justifyContent: "space-between",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Badge label="המשחק הבא שלך" tone="primary" />
+                    <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
+                  </View>
+
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 22,
+                      fontWeight: "800",
+                      textAlign: "right",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {nextMatch.title}
                   </Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-gray-900 font-medium text-right">{team.name}</Text>
-                  <Text className="text-gray-500 text-sm text-right">{team.city}</Text>
-                </View>
-                <Text className="text-gray-400 text-lg">←</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : null}
 
-        {/* No teams — onboarding */}
-        {myTeams.length === 0 && (
-          <View className="bg-white rounded-2xl p-6 mb-4 border border-gray-100 items-center">
-            <Text className="text-5xl mb-3">🏟️</Text>
-            <Text className="text-gray-900 font-bold text-lg mb-1">ברוך הבא לשכונה!</Text>
-            <Text className="text-gray-500 text-center text-sm mb-4">
-              צור קבוצה חדשה או הצטרף לקבוצה קיימת
-            </Text>
-            <TouchableOpacity
-              className="bg-primary-600 rounded-xl px-6 py-3 mb-2 w-full items-center"
-              onPress={() => router.push("/team/create")}
-            >
-              <Text className="text-white font-bold">צור קבוצה חדשה</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>
+                      {formatMatchDate(nextMatch.scheduled_at)}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+                    <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                      {nextMatch.pitch_name}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      marginTop: 14,
+                      backgroundColor: colors.primaryDim,
+                      borderRadius: 14,
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      borderWidth: 1,
+                      borderColor: colors.primaryMuted,
+                    }}
+                  >
+                    <Text style={{ color: colors.primary, fontWeight: "700" }}>פרטי המשחק</Text>
+                    <Ionicons name="arrow-back" size={16} color={colors.primary} />
+                  </View>
+                </Card>
+              </PressableScale>
+            ) : (
+              loaded && myTeams.length > 0 && (
+                <EmptyState
+                  emoji="😴"
+                  title="אין משחקים קרובים"
+                  subtitle="ברגע שיתוזמן משחק תראה אותו כאן"
+                />
+              )
+            )}
+          </FadeInUp>
+
+          {/* ── My teams ── */}
+          {myTeams.length > 0 && (
+            <FadeInUp delay={150}>
+              <SectionTitle title={`הקבוצות שלי (${myTeams.length})`} />
+              <Card padding={6}>
+                {myTeams.map((team, idx) => (
+                  <PressableScale
+                    key={team.id}
+                    onPress={() => router.push(`/team/${team.id}`)}
+                    scaleTo={0.985}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderTopWidth: idx === 0 ? 0 : 1,
+                        borderTopColor: colors.border,
+                      }}
+                    >
+                      <Avatar name={team.name} size={42} />
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: "700",
+                            textAlign: "right",
+                          }}
+                        >
+                          {team.name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.textMuted,
+                            fontSize: 12,
+                            textAlign: "right",
+                            marginTop: 2,
+                          }}
+                        >
+                          📍 {team.city}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
+                    </View>
+                  </PressableScale>
+                ))}
+              </Card>
+            </FadeInUp>
+          )}
+
+          {/* ── Onboarding (no teams) ── */}
+          {loaded && myTeams.length === 0 && (
+            <FadeInUp delay={200}>
+              <EmptyState
+                emoji="🏟️"
+                title="ברוך הבא לשכונה!"
+                subtitle="צור קבוצה חדשה או הצטרף לקבוצה קיימת דרך קישור הזמנה"
+                action={
+                  <Button
+                    label="צור קבוצה חדשה"
+                    icon="add-circle"
+                    onPress={() => router.push("/team/create")}
+                  />
+                }
+              />
+            </FadeInUp>
+          )}
+
+          {/* ── Quick action shortcut ── */}
+          {myTeams.length > 0 && (
+            <FadeInUp delay={250}>
+              <PressableScale onPress={() => router.push("/team/create")}>
+                <Card variant="outline" padding={14}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: "700" }}>צור קבוצה נוספת</Text>
+                  </View>
+                </Card>
+              </PressableScale>
+            </FadeInUp>
+          )}
+        </View>
+      </ScrollView>
+    </Screen>
   );
 }

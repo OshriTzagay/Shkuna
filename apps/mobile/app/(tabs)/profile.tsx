@@ -1,10 +1,32 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Alert, TextInput, Modal,
+  View,
+  Text,
+  ScrollView,
+  Alert,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
+import { useTheme, type ThemeMode } from "@/hooks/useTheme";
+import {
+  Screen,
+  HeroHeader,
+  Card,
+  Button,
+  Input,
+  Avatar,
+  StatTile,
+  PressableScale,
+  FadeInUp,
+  SectionTitle,
+} from "@/components/ui";
 
 interface Stats {
   matches_played: number;
@@ -14,6 +36,8 @@ interface Stats {
 
 export default function ProfileScreen() {
   const { profile, signOut, fetchProfile } = useAuthStore();
+  const { colors, mode, setMode, isDark } = useTheme();
+
   const [stats, setStats] = useState<Stats>({ matches_played: 0, mvp_count: 0, avg_rating: null });
   const [editModal, setEditModal] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
@@ -46,9 +70,10 @@ export default function ProfileScreen() {
       .select("rating")
       .eq("rated_user_id", profile.id);
 
-    const avg = ratingData && ratingData.length > 0
-      ? ratingData.reduce((s, r) => s + r.rating, 0) / ratingData.length
-      : null;
+    const avg =
+      ratingData && ratingData.length > 0
+        ? ratingData.reduce((s, r) => s + r.rating, 0) / ratingData.length
+        : null;
 
     setStats({
       matches_played: matchCount ?? 0,
@@ -58,131 +83,303 @@ export default function ProfileScreen() {
   }
 
   async function handleSave() {
-    if (!fullName.trim()) { Alert.alert("שגיאה", "שם מלא הוא חובה"); return; }
+    if (!fullName.trim()) {
+      Alert.alert("שגיאה", "שם מלא הוא חובה");
+      return;
+    }
     setSaving(true);
-    await supabase.from("users").update({
-      full_name: fullName.trim(),
-      nickname: nickname.trim() || null,
-    }).eq("id", profile!.id);
+    await supabase
+      .from("users")
+      .update({ full_name: fullName.trim(), nickname: nickname.trim() || null })
+      .eq("id", profile!.id);
     await fetchProfile();
     setSaving(false);
     setEditModal(false);
   }
 
-  if (!profile) return (
-    <View className="flex-1 bg-gray-50 items-center justify-center px-6">
-      <Text className="text-gray-400 mb-6">הפרופיל לא נטען</Text>
-      <TouchableOpacity
-        className="bg-red-500 rounded-xl px-8 py-3"
-        onPress={signOut}
-      >
-        <Text className="text-white font-bold">התנתק</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  if (!profile) {
+    return (
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }}>
+          <Text style={{ color: colors.textMuted }}>הפרופיל לא נטען</Text>
+          <Button label="התנתק" variant="danger" onPress={signOut} />
+        </View>
+      </Screen>
+    );
+  }
 
   const displayName = profile.nickname ?? profile.full_name;
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="bg-primary-600 pt-14 pb-10 px-6 items-center">
-        <View className="w-20 h-20 bg-white rounded-full items-center justify-center mb-3">
-          <Text className="text-primary-600 font-bold text-3xl">
-            {displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <Text className="text-white text-2xl font-bold">{displayName}</Text>
-        {profile.nickname && (
-          <Text className="text-white opacity-80 text-sm">{profile.full_name}</Text>
-        )}
-        <Text className="text-white opacity-60 text-sm mt-1">{profile.phone}</Text>
-      </View>
-
-      <View className="px-4 -mt-4">
-        {/* Stats */}
-        <View className="bg-white rounded-2xl p-4 mb-4 border border-gray-100">
-          <Text className="text-gray-900 font-bold text-right mb-3">סטטיסטיקות</Text>
-          <View className="flex-row justify-around">
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-primary-600">{stats.matches_played}</Text>
-              <Text className="text-gray-500 text-xs">משחקים</Text>
-            </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-yellow-500">{stats.mvp_count}</Text>
-              <Text className="text-gray-500 text-xs">MVP 🏅</Text>
-            </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-blue-500">
-                {stats.avg_rating ? stats.avg_rating.toFixed(1) : "—"}
+    <Screen>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <HeroHeader
+          subtitle={profile.phone}
+          title={displayName}
+          emoji="🎽"
+          meta={
+            profile.nickname ? (
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 12,
+                  textAlign: "right",
+                }}
+              >
+                {profile.full_name}
               </Text>
-              <Text className="text-gray-500 text-xs">דירוג ממוצע</Text>
-            </View>
-          </View>
-        </View>
+            ) : undefined
+          }
+        />
 
-        {/* Edit profile */}
-        <TouchableOpacity
-          className="bg-white rounded-2xl p-4 mb-4 border border-gray-100 flex-row-reverse items-center"
-          onPress={() => setEditModal(true)}
-        >
-          <Ionicons name="person-outline" size={20} color="#6b7280" style={{ marginLeft: 8 }} />
-          <Text className="text-gray-900 flex-1 text-right">ערוך פרופיל</Text>
-          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-        </TouchableOpacity>
+        <View style={{ paddingHorizontal: 16, marginTop: -18, gap: 14 }}>
+          {/* ── Stats ── */}
+          <FadeInUp delay={50}>
+            <Card padding={14}>
+              <SectionTitle title="סטטיסטיקות" />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <StatTile value={stats.matches_played} label="משחקים" emoji="⚽" />
+                <StatTile value={stats.mvp_count} label="MVP" tone="warning" emoji="🏅" />
+                <StatTile
+                  value={stats.avg_rating ? stats.avg_rating.toFixed(1) : "—"}
+                  label="דירוג ממוצע"
+                  tone="info"
+                  emoji="⭐"
+                />
+              </View>
+            </Card>
+          </FadeInUp>
 
-        {/* Sign out */}
-        <TouchableOpacity
-          className="bg-white rounded-2xl p-4 mb-8 border border-gray-100 flex-row-reverse items-center"
-          onPress={() => Alert.alert("יציאה", "האם אתה בטוח?", [
-            { text: "ביטול", style: "cancel" },
-            { text: "יציאה", style: "destructive", onPress: signOut },
-          ])}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#ef4444" style={{ marginLeft: 8 }} />
-          <Text className="text-red-500 flex-1 text-right">התנתק</Text>
-        </TouchableOpacity>
-      </View>
+          {/* ── Theme switcher ── */}
+          <FadeInUp delay={120}>
+            <Card padding={14}>
+              <SectionTitle title="עיצוב האפליקציה" />
+              <ThemePicker current={mode} onPress={setMode} />
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 11,
+                  textAlign: "right",
+                  marginTop: 8,
+                }}
+              >
+                כרגע: {isDark ? "🌙 מצב לילה" : "☀️ מצב יום"}
+              </Text>
+            </Card>
+          </FadeInUp>
 
-      {/* Edit modal */}
-      <Modal visible={editModal} animationType="slide" presentationStyle="pageSheet">
-        <View className="flex-1 bg-white px-6 pt-8">
-          <View className="flex-row-reverse justify-between items-center mb-6">
-            <Text className="text-2xl font-bold">ערוך פרופיל</Text>
-            <TouchableOpacity onPress={() => setEditModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
+          {/* ── Actions ── */}
+          <FadeInUp delay={180}>
+            <Card padding={6}>
+              <ActionRow
+                icon="person-outline"
+                label="ערוך פרופיל"
+                onPress={() => setEditModal(true)}
+              />
+              <Divider />
+              <ActionRow
+                icon="log-out-outline"
+                label="התנתק"
+                tone="danger"
+                onPress={() =>
+                  Alert.alert("יציאה", "האם אתה בטוח?", [
+                    { text: "ביטול", style: "cancel" },
+                    { text: "יציאה", style: "destructive", onPress: signOut },
+                  ])
+                }
+              />
+            </Card>
+          </FadeInUp>
 
-          <Text className="text-gray-700 font-medium mb-2 text-right">שם מלא</Text>
-          <TextInput
-            className="border border-gray-300 rounded-xl px-4 py-3 text-base text-right mb-4"
-            value={fullName}
-            onChangeText={setFullName}
-            textAlign="right"
-          />
-
-          <Text className="text-gray-700 font-medium mb-2 text-right">כינוי</Text>
-          <TextInput
-            className="border border-gray-300 rounded-xl px-4 py-3 text-base text-right mb-8"
-            placeholder='למשל: "המלך", "שניצל"'
-            value={nickname}
-            onChangeText={setNickname}
-            textAlign="right"
-            maxLength={20}
-          />
-
-          <TouchableOpacity
-            className="bg-primary-600 rounded-xl py-4 items-center"
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text className="text-white font-bold text-base">
-              {saving ? "שומר..." : "שמור שינויים"}
+          <FadeInUp delay={240}>
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: 11,
+                textAlign: "center",
+                marginTop: 4,
+              }}
+            >
+              שכונה · v1.0
             </Text>
-          </TouchableOpacity>
+          </FadeInUp>
+        </View>
+      </ScrollView>
+
+      {/* ── Edit modal ── */}
+      <Modal visible={editModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditModal(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <View
+              style={{
+                paddingTop: 18,
+                paddingHorizontal: 22,
+                paddingBottom: 14,
+                flexDirection: "row-reverse",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: "800" }}>
+                ערוך פרופיל
+              </Text>
+              <PressableScale onPress={() => setEditModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </PressableScale>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={{ padding: 22, gap: 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={{ alignItems: "center", marginBottom: 8 }}>
+                <Avatar name={fullName || "?"} size={70} />
+              </View>
+              <Input
+                label="שם מלא *"
+                value={fullName}
+                onChangeText={setFullName}
+              />
+              <Input
+                label="כינוי"
+                placeholder='למשל: "המלך", "שניצל"'
+                value={nickname}
+                onChangeText={setNickname}
+                maxLength={20}
+              />
+              <Button
+                label={saving ? "שומר..." : "שמור שינויים"}
+                loading={saving}
+                onPress={handleSave}
+                size="lg"
+              />
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
-    </ScrollView>
+    </Screen>
   );
+}
+
+const THEME_OPTIONS: { id: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "light",  label: "בהיר",  icon: "sunny"           },
+  { id: "dark",   label: "כהה",   icon: "moon"            },
+  { id: "system", label: "מערכת", icon: "phone-portrait"  },
+];
+
+function ThemePicker({ current, onPress }: { current: ThemeMode; onPress: (m: ThemeMode) => void }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row-reverse",
+        backgroundColor: colors.bgSurface,
+        borderRadius: 14,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      {THEME_OPTIONS.map((opt) => {
+        const active = current === opt.id;
+        return (
+          <Pressable
+            key={opt.id}
+            onPress={() => onPress(opt.id)}
+            style={{ flex: 1 }}
+          >
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 11,
+                gap: 5,
+                borderRadius: 10,
+                backgroundColor: active ? colors.primary : "transparent",
+              }}
+            >
+              <Ionicons
+                name={opt.icon}
+                size={18}
+                color={active ? colors.primaryOnText : colors.textSecondary}
+              />
+              <Text
+                style={{
+                  color: active ? colors.primaryOnText : colors.textSecondary,
+                  fontWeight: active ? "800" : "600",
+                  fontSize: 12,
+                }}
+              >
+                {opt.label}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function ActionRow({
+  icon,
+  label,
+  onPress,
+  tone = "neutral",
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  tone?: "neutral" | "danger";
+}) {
+  const { colors } = useTheme();
+  const fg = tone === "danger" ? colors.error : colors.textPrimary;
+  const iconColor = tone === "danger" ? colors.error : colors.primary;
+  return (
+    <PressableScale onPress={onPress} scaleTo={0.99}>
+      <View
+        style={{
+          flexDirection: "row-reverse",
+          alignItems: "center",
+          paddingVertical: 14,
+          paddingHorizontal: 12,
+          gap: 12,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: tone === "danger" ? colors.errorDim : colors.primaryDim,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={icon} size={18} color={iconColor} />
+        </View>
+        <Text
+          style={{
+            flex: 1,
+            color: fg,
+            fontWeight: "600",
+            fontSize: 15,
+            textAlign: "right",
+          }}
+        >
+          {label}
+        </Text>
+        <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
+      </View>
+    </PressableScale>
+  );
+}
+
+function Divider() {
+  const { colors } = useTheme();
+  return <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 12 }} />;
 }
