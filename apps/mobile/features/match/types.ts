@@ -44,7 +44,7 @@ export interface MatchResult {
 }
 
 export interface FullMatch extends Match {
-  team: Team;
+  team: Team & { jersey_colors: Record<string, string> };
 }
 
 export type MatchTabId = "register" | "teams" | "rounds";

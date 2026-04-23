@@ -192,7 +192,7 @@ export default function OtpScreen() {
           {/* ── OTP boxes ── */}
           <Animated.View
             style={{
-              flexDirection: "row-reverse",
+              flexDirection: "row",
               gap: 10,
               marginBottom: 28,
               transform: [{ translateX: shakeAnim }],

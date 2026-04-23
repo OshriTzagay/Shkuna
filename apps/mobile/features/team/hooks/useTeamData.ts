@@ -14,6 +14,7 @@ export interface MatchWithResult extends Match {
 
 export interface TeamWithData extends Team {
   jersey_holder_id: string | null;
+  jersey_colors: Record<string, string>;
   members: MemberWithUser[];
 }
 
@@ -35,6 +36,7 @@ export function useTeamData(teamId: string, profileId: string) {
     const data = rawTeam as unknown as Team & {
       members: MemberWithUser[];
       jersey_holder_id: string | null;
+      jersey_colors: Record<string, string>;
       whatsapp_payment_link: string | null;
     };
 
@@ -59,6 +61,7 @@ export function useTeamData(teamId: string, profileId: string) {
       ...data,
       members: data.members as MemberWithUser[],
       jersey_holder_id: data.jersey_holder_id ?? null,
+      jersey_colors: (data.jersey_colors as Record<string, string>) ?? {},
     });
     setUpcomingMatches(upcoming ?? []);
     setPastMatches((past ?? []) as MatchWithResult[]);
@@ -144,6 +147,15 @@ export function useTeamData(teamId: string, profileId: string) {
     [teamId]
   );
 
+  const updateJerseyColor = useCallback(
+    async (letter: string, color: string) => {
+      const next = { ...(team?.jersey_colors ?? {}), [letter]: color };
+      await supabase.from("teams").update({ jersey_colors: next }).eq("id", teamId);
+      setTeam((prev) => (prev ? { ...prev, jersey_colors: next } : prev));
+    },
+    [teamId, team?.jersey_colors]
+  );
+
   const syncRatingsFromMatches = useCallback(async () => {
     Alert.alert(
       "עדכן דירוגים",
@@ -222,7 +234,7 @@ export function useTeamData(teamId: string, profileId: string) {
     activeMembers, isAdmin, isManager,
     load, onRefresh,
     sendInvite, savePaymentLink, updateSkillRating, updateRole,
-    setJerseyHolder, syncRatingsFromMatches,
+    setJerseyHolder, updateJerseyColor, syncRatingsFromMatches,
     getJerseyHolderName, getMvpName,
   };
 }

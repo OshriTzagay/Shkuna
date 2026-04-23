@@ -1,14 +1,11 @@
-import { FlatList, View, Text, Alert } from "react-native";
+import { useState } from "react";
+import { View, Text, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { Card, Button, EmptyState, PressableScale } from "@/components/ui";
 import type { RegWithUser, TeamInMatch } from "../types";
-import type { TeamPalette } from "../types";
 
-interface SplitOption {
-  numTeams: number;
-  label: string;
-}
+interface SplitOption { numTeams: number; label: string }
 
 interface Props {
   confirmed: RegWithUser[];
@@ -42,91 +39,25 @@ export function TeamsTab({
   onUpdatePlayerRating,
 }: Props) {
   const { colors } = useTheme();
+  const [showRatings, setShowRatings] = useState(false);
+  const canShuffle = confirmed.length >= 2;
 
   return (
-    <View style={{ gap: 14 }}>
-      {/* ── Shuffle controls (admin only, before match) ── */}
+    <View style={{ gap: 12 }}>
+
+      {/* ── Admin controls ── */}
       {isAdmin && !isActive && !isFinished && (
-        <Card padding={16}>
-          <Text style={{ color: colors.textPrimary, fontWeight: "800", textAlign: "right" }}>
-            חלוקה לפי דירוג
-          </Text>
-          <Text
-            style={{ color: colors.textMuted, fontSize: 12, textAlign: "right", marginBottom: 12 }}
-          >
-            מחלק את השחקנים שנרשמו ({confirmed.length}) לקבוצות מאוזנות
-          </Text>
-
-          {/* Inline skill-rating editor */}
-          {confirmed.length > 0 && (
-            <View
-              style={{
-                marginBottom: 12,
-                borderTopWidth: 1,
-                borderTopColor: colors.border,
-                paddingTop: 12,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: 11,
-                  textAlign: "right",
-                  marginBottom: 6,
-                  fontWeight: "700",
-                }}
-              >
-                דירוג שחקנים (לפני השרבוט)
-              </Text>
-              <FlatList
-                data={confirmed}
-                keyExtractor={(r) => r.user_id}
-                scrollEnabled={false}
-                renderItem={({ item: r }) => (
-                  <View
-                    style={{
-                      flexDirection: "row-reverse",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={{ color: colors.textPrimary, flex: 1, textAlign: "right" }}>
-                      {r.user.nickname ?? r.user.full_name}
-                    </Text>
-                    <View style={{ flexDirection: "row-reverse", gap: 3 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <PressableScale
-                          key={star}
-                          scaleTo={0.85}
-                          onPress={() => onUpdatePlayerRating(r.user_id, star)}
-                        >
-                          <Ionicons
-                            name={star <= (playerRatings[r.user_id] ?? 3) ? "star" : "star-outline"}
-                            size={18}
-                            color={colors.primary}
-                          />
-                        </PressableScale>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-          )}
-
-          {/* Split option chips */}
+        <Card padding={14}>
+          {/* num-teams chips */}
           {splitOptions.length > 1 && (
-            <View
-              style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginBottom: 12 }}
-            >
+            <View style={{ flexDirection: "row-reverse", gap: 8, marginBottom: 12 }}>
               {splitOptions.map((opt) => {
                 const active = numTeams === opt.numTeams;
                 return (
                   <PressableScale key={opt.numTeams} onPress={() => onSetNumTeams(opt.numTeams)}>
                     <View
                       style={{
-                        paddingHorizontal: 12,
+                        paddingHorizontal: 14,
                         paddingVertical: 7,
                         borderRadius: 999,
                         borderWidth: 1.5,
@@ -134,13 +65,7 @@ export function TeamsTab({
                         backgroundColor: active ? colors.primary : colors.bgSurface,
                       }}
                     >
-                      <Text
-                        style={{
-                          color: active ? colors.primaryOnText : colors.textPrimary,
-                          fontWeight: active ? "800" : "600",
-                          fontSize: 12,
-                        }}
-                      >
+                      <Text style={{ color: active ? colors.primaryOnText : colors.textPrimary, fontWeight: "700", fontSize: 13 }}>
                         {opt.label}
                       </Text>
                     </View>
@@ -151,17 +76,68 @@ export function TeamsTab({
           )}
 
           <Button
-            label={confirmed.length < 2 ? "צריך לפחות 2 נרשמים" : "ערבב קבוצות אוטומטית"}
-            icon="shuffle"
+            label={canShuffle ? "ערבב קבוצות 🎲" : "צריך לפחות 2 נרשמים"}
             onPress={onShuffle}
-            disabled={confirmed.length < 2}
+            disabled={!canShuffle}
+            size="lg"
           />
+
+          {/* collapsible ratings editor */}
+          {canShuffle && (
+            <>
+              <PressableScale onPress={() => setShowRatings((v) => !v)}>
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10 }}>
+                  <Ionicons
+                    name={showRatings ? "chevron-up" : "chevron-down"}
+                    size={14}
+                    color={colors.textMuted}
+                  />
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>
+                    {showRatings ? "הסתר דירוגי שחקנים" : "ערוך דירוגי שחקנים"}
+                  </Text>
+                </View>
+              </PressableScale>
+
+              {showRatings && (
+                <View style={{ marginTop: 12, gap: 4 }}>
+                  {confirmed.map((r) => (
+                    <View
+                      key={r.user_id}
+                      style={{
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        paddingVertical: 7,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                        gap: 10,
+                      }}
+                    >
+                      <Text style={{ color: colors.textPrimary, flex: 1, textAlign: "right", fontSize: 13 }}>
+                        {r.user.nickname ?? r.user.full_name}
+                      </Text>
+                      <View style={{ flexDirection: "row-reverse", gap: 3 }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <PressableScale key={star} scaleTo={0.85} onPress={() => onUpdatePlayerRating(r.user_id, star)}>
+                            <Ionicons
+                              name={star <= (playerRatings[r.user_id] ?? 3) ? "star" : "star-outline"}
+                              size={17}
+                              color={colors.primary}
+                            />
+                          </PressableScale>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </Card>
       )}
 
       {/* ── Team cards ── */}
       {currentTeams.length > 0 ? (
-        <View style={{ gap: 14 }}>
+        <View style={{ gap: 12 }}>
           <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 }}>
             {currentTeams.map((team) => (
               <TeamCard key={team.letter} team={team} getName={getName} />
@@ -169,11 +145,10 @@ export function TeamsTab({
           </View>
           {isAdmin && !isActive && !isFinished && (
             <Button
-              label="התחל משחק"
-              emoji="⚽"
+              label="התחל משחק ⚽"
               size="lg"
               onPress={() =>
-                Alert.alert("התחל משחק", "לצאת לשחק?", [
+                Alert.alert("התחל משחק", "יאללה לשחק?", [
                   { text: "ביטול", style: "cancel" },
                   { text: "התחל!", onPress: onStartMatch },
                 ])
@@ -184,8 +159,8 @@ export function TeamsTab({
       ) : (
         <EmptyState
           emoji="🎲"
-          title="עדיין לא חולקו קבוצות"
-          subtitle={isAdmin ? "בקש שחקנים להירשם ולחץ ערבב" : "המנהל יחלק את הקבוצות בקרוב"}
+          title="קבוצות עוד לא חולקו"
+          subtitle={isAdmin ? "לחץ ערבב כדי לחלק אוטומטית" : "המנהל יחלק את הקבוצות בקרוב"}
         />
       )}
     </View>
@@ -203,23 +178,19 @@ function TeamCard({ team, getName }: { team: TeamInMatch; getName: (uid: string)
         minWidth: "47%",
         borderRadius: 18,
         padding: 14,
+        gap: 6,
       }}
     >
-      <Text
-        style={{
-          color: team.cfg.text,
-          fontWeight: "800",
-          fontSize: 15,
-          textAlign: "center",
-          marginBottom: 8,
-        }}
-      >
-        קבוצה {team.cfg.name}
-      </Text>
+      <View style={{ flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 4 }}>
+        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: team.cfg.border }} />
+        <Text style={{ color: team.cfg.text, fontWeight: "800", fontSize: 14 }}>
+          {team.cfg.name}
+        </Text>
+      </View>
       {team.playerIds.map((uid) => (
         <Text
           key={uid}
-          style={{ color: team.cfg.text, opacity: 0.85, textAlign: "center", fontSize: 13, paddingVertical: 2 }}
+          style={{ color: team.cfg.text, opacity: 0.85, textAlign: "center", fontSize: 13 }}
         >
           {getName(uid)}
         </Text>

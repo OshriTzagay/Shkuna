@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { useTeamData } from "@/features/team/hooks/useTeamData";
 import { MemberRow } from "@/features/team/components/MemberRow";
+import { JERSEY_PALETTES, type JerseyColor } from "@/features/match/hooks/useTeamPalette";
 import type { MatchWithResult } from "@/features/team/hooks/useTeamData";
 import type { UserRole } from "@shkuna/db";
 
@@ -42,6 +43,9 @@ export default function TeamScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showJerseyModal, setShowJerseyModal] = useState(false);
+  const [showColorsModal, setShowColorsModal] = useState(false);
+  const [historyPage, setHistoryPage] = useState(5);
+  const PAGE_SIZE = 5;
   const [invitePhone, setInvitePhone] = useState("");
   const [paymentLink, setPaymentLink] = useState(teamData.team?.whatsapp_payment_link ?? "");
 
@@ -117,6 +121,15 @@ export default function TeamScreen() {
               />
               {isManager && (
                 <>
+                  <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 12 }} />
+                  <InfoRow
+                    iconName="color-palette-outline"
+                    label="צבעי גופיות"
+                    value={Object.keys(team.jersey_colors ?? {}).length > 0
+                      ? Object.entries(team.jersey_colors).map(([l, c]) => `${l}: ${JERSEY_PALETTES[c as JerseyColor]?.name ?? c}`).join("  ·  ")
+                      : "ברירת מחדל"}
+                    onPress={() => setShowColorsModal(true)}
+                  />
                   <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 12 }} />
                   <InfoRow
                     iconName="card"
@@ -238,7 +251,7 @@ export default function TeamScreen() {
               <SectionTitle title={`היסטוריית משחקים (${pastMatches.length})`} />
               <Card padding={6}>
                 <FlatList
-                  data={pastMatches}
+                  data={pastMatches.slice(0, historyPage)}
                   keyExtractor={(m) => m.id}
                   scrollEnabled={false}
                   ItemSeparatorComponent={() => (
@@ -253,6 +266,15 @@ export default function TeamScreen() {
                     />
                   )}
                 />
+                {historyPage < pastMatches.length && (
+                  <PressableScale onPress={() => setHistoryPage((p) => p + PAGE_SIZE)}>
+                    <View style={{ paddingVertical: 12, alignItems: "center", borderTopWidth: 1, borderTopColor: colors.border }}>
+                      <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 13 }}>
+                        הצג עוד ({pastMatches.length - historyPage} נותרו)
+                      </Text>
+                    </View>
+                  </PressableScale>
+                )}
               </Card>
             </FadeInUp>
           )}
@@ -311,6 +333,61 @@ export default function TeamScreen() {
           size="lg"
           onPress={() => teamData.savePaymentLink(paymentLink, () => setShowPaymentModal(false))}
         />
+      </SheetModal>
+
+      <SheetModal
+        visible={showColorsModal}
+        onClose={() => setShowColorsModal(false)}
+        title="צבעי גופיות"
+        scrollable
+      >
+        <Text style={{ color: colors.textSecondary, textAlign: "right", fontSize: 13 }}>
+          בחר צבע לכל קבוצה — הצבעים יופיעו גם במשחקונים
+        </Text>
+        {["A", "B", "C"].map((letter) => {
+          const current = (team.jersey_colors?.[letter] ?? null) as JerseyColor | null;
+          return (
+            <View key={letter} style={{ gap: 8 }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: "700", textAlign: "right", fontSize: 14 }}>
+                קבוצה {letter}
+              </Text>
+              <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 10 }}>
+                {(Object.entries(JERSEY_PALETTES) as [JerseyColor, typeof JERSEY_PALETTES[JerseyColor]][]).map(([key, def]) => {
+                  const active = current === key;
+                  return (
+                    <PressableScale
+                      key={key}
+                      onPress={() => teamData.updateJerseyColor(letter, key)}
+                      scaleTo={0.88}
+                    >
+                      <View style={{ alignItems: "center", gap: 4 }}>
+                        <View
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: def.dark.bg,
+                            borderWidth: active ? 3 : 1.5,
+                            borderColor: active ? def.dark.border : def.dark.border + "80",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {active && (
+                            <Ionicons name="checkmark" size={20} color={def.dark.text} />
+                          )}
+                        </View>
+                        <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: "600" }}>
+                          {def.name}
+                        </Text>
+                      </View>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
       </SheetModal>
 
       <SheetModal

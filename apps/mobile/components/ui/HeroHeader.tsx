@@ -55,7 +55,6 @@ export function HeroHeader({
             marginBottom: 14,
           }}
         >
-          <View style={{ flex: 1 }}>{rightSlot}</View>
           {showBack && (
             <TouchableOpacity
               onPress={onBack ?? (() => router.back())}
@@ -74,6 +73,7 @@ export function HeroHeader({
               <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
             </TouchableOpacity>
           )}
+          <View style={{ flex: 1 }}>{rightSlot}</View>
         </View>
       )}
 

@@ -21,10 +21,10 @@ export default function MatchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const { profile } = useAuthStore();
-  const cfgFor = useCfgFor();
 
   const data = useMatchData(id!, profile!.id);
   const { handleStopwatch } = useStopwatch(id!, data.match, data.setMatch, data.setElapsed);
+  const cfgFor = useCfgFor(data.match?.team?.jersey_colors ?? {});
 
   const [activeTab, setActiveTab] = useState<MatchTabId>("register");
   const [showEndSheet, setShowEndSheet] = useState(false);
@@ -201,6 +201,7 @@ export default function MatchScreen() {
             border: t.cfg.border,
             text: t.cfg.text,
           }))}
+          points={gameState?.points ?? {}}
           onClose={() => setShowEndSheet(false)}
           onDone={() => { setShowEndSheet(false); data.load(); }}
         />

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Alert } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { computeElapsed, shuffleTeams, suggestSplits } from "@shkuna/utils";
@@ -14,13 +14,10 @@ import type {
 import { useCfgFor } from "./useTeamPalette";
 
 export function useMatchData(matchId: string, profileId: string) {
-  const cfgFor = useCfgFor();
-
   const [match, setMatch] = useState<FullMatch | null>(null);
   const [myRole, setMyRole] = useState<UserRole | null>(null);
   const [registrations, setRegistrations] = useState<RegWithUser[]>([]);
   const [payments, setPayments] = useState<PaymentWithUser[]>([]);
-  const [currentTeams, setCurrentTeams] = useState<TeamInMatch[]>([]);
   const [rounds, setRounds] = useState<RoundRecord[]>([]);
   const [numTeams, setNumTeams] = useState(2);
   const [playerRatings, setPlayerRatings] = useState<Record<string, number>>({});
@@ -29,6 +26,19 @@ export function useMatchData(matchId: string, profileId: string) {
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Raw team splits — stored without colors so they re-derive when jersey_colors changes
+  const [rawSplits, setRawSplits] = useState<{ letter: string; playerIds: string[] }[]>([]);
+
+  // cfgFor is derived from jersey_colors stored on the match — fully reactive
+  const jerseyColors = match?.team?.jersey_colors ?? {};
+  const cfgFor = useCfgFor(jerseyColors);
+
+  // currentTeams recomputes automatically whenever cfgFor changes (i.e. jersey_colors updated)
+  const currentTeams: TeamInMatch[] = useMemo(
+    () => rawSplits.map((s) => ({ letter: s.letter, playerIds: s.playerIds, cfg: cfgFor(s.letter) })),
+    [rawSplits, cfgFor]
+  );
 
   // ── Fetch ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -48,7 +58,6 @@ export function useMatchData(matchId: string, profileId: string) {
       )
     );
 
-    // Parallel fetches — no sequential waterfall
     const [
       { data: regs },
       { data: pays },
@@ -64,7 +73,7 @@ export function useMatchData(matchId: string, profileId: string) {
         .from("payments")
         .select("*, user:users(id, full_name, nickname, phone)")
         .eq("match_id", matchId),
-      supabase  
+      supabase
         .from("match_teams")
         .select("*")
         .eq("match_id", matchId)
@@ -87,13 +96,8 @@ export function useMatchData(matchId: string, profileId: string) {
     if (splits && splits.length > 0) {
       const latestTs = splits[0]!.generated_at;
       const latest = splits.filter((s) => s.generated_at === latestTs);
-      setCurrentTeams(
-        latest.map((s) => ({
-          letter: s.team_letter,
-          playerIds: s.player_ids,
-          cfg: cfgFor(s.team_letter),
-        }))
-      );
+      // Store raw splits — cfg is derived reactively via useMemo above
+      setRawSplits(latest.map((s) => ({ letter: s.team_letter, playerIds: s.player_ids })));
       setNumTeams(latest.length);
     }
 
@@ -137,7 +141,7 @@ export function useMatchData(matchId: string, profileId: string) {
     });
     setAvgRatings(avgs);
     setMatchResult(result ?? null);
-  }, [matchId, profileId, cfgFor]);
+  }, [matchId, profileId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -224,15 +228,10 @@ export function useMatchData(matchId: string, profileId: string) {
         generated_at: now,
       }))
     );
-    setCurrentTeams(
-      teams.map((t) => ({
-        letter: t.letter,
-        playerIds: t.players.map((p) => p.id),
-        cfg: cfgFor(t.letter),
-      }))
-    );
+    // Store raw splits — cfg derives automatically from jersey_colors
+    setRawSplits(teams.map((t) => ({ letter: t.letter, playerIds: t.players.map((p) => p.id) })));
     setNumTeams(teams.length);
-  }, [confirmed, numTeams, matchId, profileId, cfgFor, playerRatings]);
+  }, [confirmed, numTeams, matchId, profileId, playerRatings]);
 
   const handleStartMatch = useCallback(async () => {
     await supabase.from("matches").update({ status: "active" }).eq("id", matchId);
@@ -266,15 +265,11 @@ export function useMatchData(matchId: string, profileId: string) {
   }, [match]);
 
   return {
-    // State
     match, myRole, registrations, payments, currentTeams, rounds, numTeams,
     playerRatings, myMatchRatings, avgRatings, matchResult, elapsed, refreshing,
-    // Setters (needed by useStopwatch)
     setMatch, setElapsed, setRounds,
-    // Derived
     confirmed, waiting, myReg, isFull, isAdmin, isManager, isActive, isFinished,
     myPayment, splitOptions,
-    // Actions
     load, onRefresh,
     handleRegister, handleShuffle, handleStartMatch,
     handleConfirmPayment, handleRatePlayer, updatePlayerRating,

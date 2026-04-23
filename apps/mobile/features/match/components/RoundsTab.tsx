@@ -1,8 +1,9 @@
-import { FlatList, View, Text, Alert } from "react-native";
+import { useState } from "react";
+import { View, Text, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { formatStopwatch } from "@shkuna/utils";
 import { useTheme } from "@/hooks/useTheme";
-import { Card, Button, SectionTitle, PressableScale } from "@/components/ui";
+import { Card, Button, PressableScale } from "@/components/ui";
 import { StopwatchWidget } from "./StopwatchWidget";
 import type { RoundRecord, TeamInMatch, GameState, MatchResult, TeamPalette, RegWithUser } from "../types";
 
@@ -26,41 +27,38 @@ interface Props {
 }
 
 export function RoundsTab({
-  rounds,
-  currentTeams,
-  gameState,
-  matchResult,
-  avgRatings,
-  confirmed,
-  elapsed,
-  isActive,
-  isFinished,
-  isAdmin,
-  cfgFor,
-  getName,
-  onStopwatch,
-  onRoundResult,
-  onEndMatch,
-  stopwatchRunning,
+  rounds, currentTeams, gameState, matchResult, avgRatings,
+  confirmed, elapsed, isActive, isFinished, isAdmin,
+  cfgFor, getName, onStopwatch, onRoundResult, onEndMatch, stopwatchRunning,
 }: Props) {
   const { colors } = useTheme();
-  const teamLetters = currentTeams.map((t) => t.letter);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
-  function promptRoundResult(teamLetter: string) {
-    const cfg = cfgFor(teamLetter);
+  function confirmWin(letter: string) {
+    const cfg = cfgFor(letter);
     Alert.alert(
-      `קבוצה ${cfg.name} ניצחה?`,
-      "+3 נקודות לקבוצה המנצחת, הקבוצה המפסידה יורדת",
+      `🏆 קבוצה ${cfg.name} ניצחה?`,
+      "המפסידים יורדים, הקבוצה הבאה עולה",
       [
         { text: "ביטול", style: "cancel" },
-        { text: "כן, ניצחה! 🏆", onPress: () => onRoundResult(teamLetter) },
+        { text: "אישור", onPress: () => onRoundResult(letter) },
       ]
     );
   }
 
+  function confirmDraw() {
+    Alert.alert("🤝 תיקו?", "1 נקודה לכל קבוצה", [
+      { text: "ביטול", style: "cancel" },
+      { text: "אישור", onPress: () => onRoundResult(null) },
+    ]);
+  }
+
+  const visibleHistory = showAllHistory ? rounds : rounds.slice(-5);
+
   return (
-    <View style={{ gap: 14 }}>
-      {/* ── Match summary (finished) ── */}
+    <View style={{ gap: 12 }}>
+
+      {/* ── Post-match summary ── */}
       {isFinished && (
         <MatchSummary
           matchResult={matchResult}
@@ -69,7 +67,6 @@ export function RoundsTab({
           confirmed={confirmed}
           cfgFor={cfgFor}
           getName={getName}
-          colors={colors}
         />
       )}
 
@@ -84,122 +81,260 @@ export function RoundsTab({
         />
       )}
 
-      {/* ── Scoreboard ── */}
-      <Card padding={14}>
-        <SectionTitle title="לוח ניקוד" />
-        <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 }}>
-          {teamLetters.map((letter) => {
-            const cfg = cfgFor(letter);
-            const pts = gameState.points[letter] ?? 0;
-            const isPlaying = gameState.playing.includes(letter);
-            return (
-              <View
-                key={letter}
-                style={{
-                  backgroundColor: cfg.bg,
-                  borderColor: cfg.border,
-                  borderWidth: isPlaying ? 2 : 1,
-                  borderRadius: 14,
-                  padding: 12,
-                  flex: 1,
-                  minWidth: "30%",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: cfg.text, fontWeight: "700", fontSize: 12 }}>
-                  קבוצה {cfg.name}
-                </Text>
-                <Text style={{ color: cfg.text, fontWeight: "900", fontSize: 26, marginVertical: 4 }}>
-                  {pts}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 10 }}>
-                  {isPlaying ? "🎮 משחקת" : "⏳ ממתינה"}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </Card>
-
-      {/* ── Active court ── */}
+      {/* ── Active court — main action area ── */}
       {isActive && (
-        <ActiveCourt
-          gameState={gameState}
-          currentTeams={currentTeams}
-          rounds={rounds}
-          cfgFor={cfgFor}
-          getName={getName}
-          colors={colors}
-          onWin={promptRoundResult}
-          onDraw={() =>
-            Alert.alert("תיקו", "1 נקודה לכל קבוצה", [
-              { text: "ביטול", style: "cancel" },
-              { text: "אישור תיקו", onPress: () => onRoundResult(null) },
-            ])
-          }
-        />
+        <Card padding={14}>
+          {/* Round header */}
+          <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success }} />
+              <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 15 }}>
+                מחזור {rounds.length + 1}
+              </Text>
+            </View>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>לחץ על הקבוצה שניצחה</Text>
+          </View>
+
+          {/* Two playing teams — full-width tap targets */}
+          <View style={{ gap: 10 }}>
+            {gameState.playing.map((letter, idx) => {
+              const cfg = cfgFor(letter);
+              const team = currentTeams.find((t) => t.letter === letter);
+              return (
+                <View key={letter}>
+                  <PressableScale onPress={() => confirmWin(letter)} scaleTo={0.97}>
+                    <View
+                      style={{
+                        backgroundColor: cfg.bg,
+                        borderColor: cfg.border,
+                        borderWidth: 2,
+                        borderRadius: 16,
+                        padding: 14,
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      {/* Color dot */}
+                      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cfg.border }} />
+                      {/* Team info */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: cfg.text, fontWeight: "800", fontSize: 14 }}>
+                          קבוצה {cfg.name}
+                        </Text>
+                        <Text style={{ color: cfg.text, opacity: 0.75, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                          {team?.playerIds.map((uid) => getName(uid)).join("  ·  ")}
+                        </Text>
+                      </View>
+                      {/* Win badge */}
+                      <View style={{ backgroundColor: cfg.border + "AA", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 }}>
+                        <Text style={{ color: cfg.text, fontWeight: "800", fontSize: 12 }}>🏆 ניצחה</Text>
+                      </View>
+                    </View>
+                  </PressableScale>
+                  {/* VS divider */}
+                  {idx === 0 && (
+                    <View style={{ alignItems: "center", marginVertical: 4 }}>
+                      <Text style={{ color: colors.textMuted, fontWeight: "800", fontSize: 12 }}>VS</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Draw button */}
+          <View style={{ marginTop: 10 }}>
+            <Button label="🤝 תיקו (+1 לכל קבוצה)" variant="secondary" onPress={confirmDraw} />
+          </View>
+
+          {/* Waiting queue */}
+          {gameState.waiting.length > 0 && (
+            <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+              <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: "right", marginBottom: 8, fontWeight: "700" }}>
+                תור המתנה
+              </Text>
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                {gameState.waiting.map((letter, idx) => {
+                  const cfg = cfgFor(letter);
+                  return (
+                    <View
+                      key={letter}
+                      style={{
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 6,
+                        backgroundColor: cfg.bg,
+                        borderColor: cfg.border,
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <Text style={{ color: cfg.text, fontWeight: "700", fontSize: 12 }}>
+                        קבוצה {cfg.name}
+                      </Text>
+                      <View style={{ backgroundColor: cfg.border + "60", borderRadius: 999, width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: cfg.text, fontSize: 10, fontWeight: "800" }}>{idx + 1}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </Card>
+      )}
+
+      {/* ── Scoreboard ── */}
+      {currentTeams.length > 0 && (
+        <Card padding={14}>
+          <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 13, textAlign: "right", marginBottom: 10 }}>
+            ניקוד
+          </Text>
+          {/* Sort by points descending */}
+          {[...currentTeams]
+            .sort((a, b) => (gameState.points[b.letter] ?? 0) - (gameState.points[a.letter] ?? 0))
+            .map((team, idx) => {
+              const pts = gameState.points[team.letter] ?? 0;
+              const isPlaying = gameState.playing.includes(team.letter);
+              const cfg = cfgFor(team.letter);
+              const maxPts = Math.max(...Object.values(gameState.points), 1);
+              return (
+                <View
+                  key={team.letter}
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingVertical: 8,
+                    borderTopWidth: idx === 0 ? 0 : 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  {/* Rank */}
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "700", width: 18, textAlign: "center" }}>
+                    {idx + 1}
+                  </Text>
+                  {/* Color dot + name */}
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cfg.border }} />
+                  <Text style={{ color: cfg.text, fontWeight: "700", fontSize: 13, width: 52 }}>
+                    {cfg.name}
+                  </Text>
+                  {/* Progress bar */}
+                  <View style={{ flex: 1, height: 6, backgroundColor: colors.bgSurface, borderRadius: 999 }}>
+                    <View style={{ height: "100%", width: `${(pts / maxPts) * 100}%`, backgroundColor: cfg.border, borderRadius: 999 }} />
+                  </View>
+                  {/* Points */}
+                  <Text style={{ color: colors.textPrimary, fontWeight: "900", fontSize: 15, width: 28, textAlign: "right" }}>
+                    {pts}
+                  </Text>
+                  {/* Status badge */}
+                  <View style={{ width: 56, alignItems: "flex-start" }}>
+                    {isPlaying ? (
+                      <View style={{ backgroundColor: colors.success + "25", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: colors.success, fontSize: 10, fontWeight: "700" }}>🎮 משחקת</Text>
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: colors.bgSurface, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: 10 }}>⏳ ממתינה</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+        </Card>
       )}
 
       {/* ── Round history ── */}
       {rounds.length > 0 && (
         <Card padding={14}>
-          <SectionTitle title="היסטוריית מחזורים" />
-          <FlatList
-            data={[...rounds].reverse()}
-            keyExtractor={(r) => String(r.id || r.round_number)}
-            scrollEnabled={false}
-            renderItem={({ item: r }) => {
+          <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 13 }}>
+              {rounds.length} מחזורים
+            </Text>
+            {rounds.length > 5 && (
+              <PressableScale onPress={() => setShowAllHistory((v) => !v)}>
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>
+                  {showAllHistory ? "פחות" : `הצג הכל`}
+                </Text>
+              </PressableScale>
+            )}
+          </View>
+          <View style={{ gap: 0 }}>
+            {[...visibleHistory].reverse().map((r, idx) => {
               const winCfg = r.winner ? cfgFor(r.winner) : null;
               const t1cfg = cfgFor(r.team1_letter);
               const t2cfg = cfgFor(r.team2_letter);
               return (
                 <View
+                  key={String(r.id || r.round_number)}
                   style={{
                     flexDirection: "row-reverse",
                     alignItems: "center",
                     paddingVertical: 8,
-                    borderTopWidth: 1,
+                    borderTopWidth: idx === 0 ? 0 : 1,
                     borderTopColor: colors.border,
                     gap: 8,
                   }}
                 >
-                  <Text style={{ color: colors.textMuted, fontSize: 11, width: 56, textAlign: "right" }}>
-                    מחזור {r.round_number}
+                  <Text style={{ color: colors.textMuted, fontSize: 11, width: 44, textAlign: "right" }}>
+                    #{r.round_number}
                   </Text>
-                  <View
-                    style={{ flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 4 }}
-                  >
-                    <Text style={{ color: t1cfg.text, fontWeight: "700", fontSize: 12 }}>{t1cfg.name}</Text>
+                  <View style={{ flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t1cfg.border }} />
+                    <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 12 }}>{t1cfg.name}</Text>
                     <Text style={{ color: colors.textMuted, fontSize: 11 }}>vs</Text>
-                    <Text style={{ color: t2cfg.text, fontWeight: "700", fontSize: 12 }}>{t2cfg.name}</Text>
+                    <Text style={{ color: colors.textSecondary, fontWeight: "700", fontSize: 12 }}>{t2cfg.name}</Text>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t2cfg.border }} />
                   </View>
-                  <Text style={{ color: winCfg?.text ?? colors.textMuted, fontWeight: "800", fontSize: 12, minWidth: 60, textAlign: "right" }}>
-                    {r.winner ? `🏆 ${winCfg?.name}` : "🤝 תיקו"}
-                  </Text>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 4, minWidth: 70 }}>
+                    {winCfg ? (
+                      <>
+                        <Text style={{ fontSize: 12 }}>🏆</Text>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: winCfg.border }} />
+                        <Text style={{ color: winCfg.text, fontWeight: "800", fontSize: 12 }}>{winCfg.name}</Text>
+                      </>
+                    ) : (
+                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>🤝 תיקו</Text>
+                    )}
+                  </View>
                   {r.duration_sec ? (
-                    <Text style={{ color: colors.textMuted, fontSize: 11, width: 48, textAlign: "right" }}>
+                    <Text style={{ color: colors.textMuted, fontSize: 11, width: 42, textAlign: "right" }}>
                       {formatStopwatch(r.duration_sec)}
                     </Text>
                   ) : null}
                 </View>
               );
-            }}
-          />
+            })}
+          </View>
         </Card>
       )}
 
       {/* ── End match ── */}
       {isAdmin && isActive && (
-        <Button label="🏁 סיים משחק" variant="danger" size="lg" onPress={onEndMatch} />
+        <Button
+          label="סיים משחק 🏁"
+          variant="danger"
+          size="lg"
+          onPress={() =>
+            Alert.alert("סיום משחק", "לסיים את המשחק?", [
+              { text: "ביטול", style: "cancel" },
+              { text: "סיים", style: "destructive", onPress: onEndMatch },
+            ])
+          }
+        />
       )}
     </View>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────
+// ── MatchSummary ───────────────────────────────────────────────
 
 function MatchSummary({
-  matchResult, currentTeams, avgRatings, confirmed, cfgFor, getName, colors,
+  matchResult, currentTeams, avgRatings, confirmed, cfgFor, getName,
 }: {
   matchResult: MatchResult | null;
   currentTeams: TeamInMatch[];
@@ -207,234 +342,88 @@ function MatchSummary({
   confirmed: RegWithUser[];
   cfgFor: (letter: string) => TeamPalette;
   getName: (uid: string) => string;
-  colors: any;
 }) {
+  const { colors } = useTheme();
   const winTeam = matchResult?.winning_team_letter
     ? currentTeams.find((t) => t.letter === matchResult.winning_team_letter)
     : null;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 10 }}>
+      {/* Winner banner */}
       {winTeam ? (
-        <View
-          style={{
-            backgroundColor: winTeam.cfg.bg,
-            borderColor: winTeam.cfg.border,
-            borderWidth: 2,
-            borderRadius: 22,
-            padding: 18,
-          }}
-        >
-          <Text
-            style={{ color: winTeam.cfg.text, fontWeight: "900", fontSize: 18, textAlign: "center", marginBottom: 8 }}
-          >
-            🏆 קבוצה {winTeam.cfg.name} ניצחה!
-          </Text>
-          <View style={{ flexDirection: "row-reverse", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
+        <View style={{ backgroundColor: winTeam.cfg.bg, borderColor: winTeam.cfg.border, borderWidth: 2, borderRadius: 20, padding: 18, alignItems: "center", gap: 10 }}>
+          <Text style={{ color: winTeam.cfg.text, fontWeight: "900", fontSize: 20 }}>🏆 קבוצה {winTeam.cfg.name} ניצחה!</Text>
+          <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
             {winTeam.playerIds.map((uid) => (
-              <View
-                key={uid}
-                style={{ backgroundColor: winTeam.cfg.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}
-              >
-                <Text style={{ color: winTeam.cfg.text, fontWeight: "700", fontSize: 12 }}>
-                  {getName(uid)}
-                </Text>
+              <View key={uid} style={{ backgroundColor: winTeam.cfg.border + "55", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 }}>
+                <Text style={{ color: winTeam.cfg.text, fontWeight: "700", fontSize: 12 }}>{getName(uid)}</Text>
               </View>
             ))}
           </View>
         </View>
       ) : (
-        <Card variant="surface" padding={16}>
-          <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 17, textAlign: "center" }}>
-            🤝 תיקו
-          </Text>
+        <Card padding={16}>
+          <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 17, textAlign: "center" }}>🤝 תיקו</Text>
         </Card>
       )}
 
-      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-        {matchResult?.mvp_user_id && (
-          <AwardCard
-            emoji="🏅"
-            color={colors.warning}
-            dimColor={colors.warningDim}
-            borderColor={colors.warning + "55"}
-            label="מצטיין"
-            name={getName(matchResult.mvp_user_id)}
-          />
-        )}
-        {matchResult?.low_user_id && (
-          <AwardCard
-            emoji="💩"
-            color={colors.error}
-            dimColor={colors.errorDim}
-            borderColor={colors.error + "55"}
-            label="שחקן שפל"
-            name={getName(matchResult.low_user_id)}
-          />
-        )}
-      </View>
+      {/* MVP / Low */}
+      {(matchResult?.mvp_user_id || matchResult?.low_user_id) && (
+        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+          {matchResult.mvp_user_id && (
+            <AwardCard emoji="🏅" label="מצטיין" name={getName(matchResult.mvp_user_id)} tone="warning" />
+          )}
+          {matchResult.low_user_id && (
+            <AwardCard emoji="💩" label="שחקן שפל" name={getName(matchResult.low_user_id)} tone="error" />
+          )}
+        </View>
+      )}
 
+      {/* Player ratings */}
       {Object.keys(avgRatings).length > 0 && (
         <Card padding={14}>
-          <SectionTitle title="דירוגי שחקנים" />
-          <FlatList
-            data={confirmed.filter((r) => avgRatings[r.user_id] != null)}
-            keyExtractor={(r) => r.user_id}
-            scrollEnabled={false}
-            renderItem={({ item: r }) => {
+          <Text style={{ color: colors.textPrimary, fontWeight: "800", fontSize: 13, textAlign: "right", marginBottom: 10 }}>
+            דירוגי שחקנים
+          </Text>
+          {confirmed
+            .filter((r) => avgRatings[r.user_id] != null)
+            .sort((a, b) => (avgRatings[b.user_id] ?? 0) - (avgRatings[a.user_id] ?? 0))
+            .map((r, idx) => {
               const avg = avgRatings[r.user_id]!;
               return (
                 <View
-                  style={{
-                    flexDirection: "row-reverse",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: 6,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
-                  }}
+                  key={r.user_id}
+                  style={{ flexDirection: "row-reverse", alignItems: "center", paddingVertical: 7, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: colors.border, gap: 10 }}
                 >
+                  <Text style={{ color: colors.textMuted, fontSize: 12, width: 18, textAlign: "center" }}>{idx + 1}</Text>
                   <Text style={{ color: colors.textPrimary, flex: 1, textAlign: "right", fontSize: 13 }}>
                     {r.user.nickname ?? r.user.full_name}
                   </Text>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 3 }}>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 2 }}>
                     {[1, 2, 3, 4, 5].map((s) => (
-                      <Ionicons
-                        key={s}
-                        name={s <= Math.round(avg) ? "star" : "star-outline"}
-                        size={13}
-                        color={colors.warning}
-                      />
+                      <Ionicons key={s} name={s <= Math.round(avg) ? "star" : "star-outline"} size={13} color={colors.warning} />
                     ))}
-                    <Text style={{ color: colors.textMuted, fontSize: 11, marginRight: 6 }}>{avg}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 11, marginRight: 4 }}>{avg}</Text>
                   </View>
                 </View>
               );
-            }}
-          />
+            })}
         </Card>
       )}
     </View>
   );
 }
 
-function AwardCard({
-  emoji, color, dimColor, borderColor, label, name,
-}: {
-  emoji: string; color: string; dimColor: string; borderColor: string; label: string; name: string;
-}) {
+function AwardCard({ emoji, label, name, tone }: { emoji: string; label: string; name: string; tone: "warning" | "error" }) {
+  const { colors } = useTheme();
+  const color = tone === "warning" ? colors.warning : colors.error;
+  const bg = tone === "warning" ? colors.warningDim : colors.errorDim;
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: dimColor,
-        borderColor,
-        borderWidth: 1,
-        borderRadius: 16,
-        padding: 12,
-        alignItems: "center",
-      }}
-    >
-      <Text style={{ fontSize: 28, marginBottom: 4 }}>{emoji}</Text>
+    <View style={{ flex: 1, backgroundColor: bg, borderColor: color + "55", borderWidth: 1, borderRadius: 16, padding: 14, alignItems: "center", gap: 4 }}>
+      <Text style={{ fontSize: 28 }}>{emoji}</Text>
       <Text style={{ color, fontWeight: "800", fontSize: 13, textAlign: "center" }}>{name}</Text>
-      <Text style={{ color: "#94A8C4", fontSize: 11 }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: 11 }}>{label}</Text>
     </View>
-  );
-}
-
-function ActiveCourt({
-  gameState, currentTeams, rounds, cfgFor, getName, colors, onWin, onDraw,
-}: {
-  gameState: GameState;
-  currentTeams: TeamInMatch[];
-  rounds: RoundRecord[];
-  cfgFor: (letter: string) => TeamPalette;
-  getName: (uid: string) => string;
-  colors: any;
-  onWin: (letter: string) => void;
-  onDraw: () => void;
-}) {
-  return (
-    <Card padding={14}>
-      <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: "center", marginBottom: 10 }}>
-        מחזור {rounds.length + 1} — לחץ על הקבוצה שניצחה
-      </Text>
-      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-        {gameState.playing.map((letter) => {
-          const cfg = cfgFor(letter);
-          const team = currentTeams.find((t) => t.letter === letter);
-          return (
-            <PressableScale key={letter} onPress={() => onWin(letter)} style={{ flex: 1 }}>
-              <View
-                style={{
-                  backgroundColor: cfg.bg,
-                  borderColor: cfg.border,
-                  borderWidth: 2,
-                  borderRadius: 18,
-                  padding: 14,
-                }}
-              >
-                <Text
-                  style={{ color: cfg.text, fontWeight: "800", fontSize: 14, textAlign: "center", marginBottom: 6 }}
-                >
-                  קבוצה {cfg.name}
-                </Text>
-                {team?.playerIds.map((uid) => (
-                  <Text
-                    key={uid}
-                    style={{ color: cfg.text, opacity: 0.85, textAlign: "center", fontSize: 11, paddingVertical: 1 }}
-                  >
-                    {getName(uid)}
-                  </Text>
-                ))}
-                <View
-                  style={{ marginTop: 10, backgroundColor: cfg.border, borderRadius: 10, paddingVertical: 6 }}
-                >
-                  <Text style={{ color: cfg.text, textAlign: "center", fontWeight: "800", fontSize: 12 }}>
-                    🏆 ניצחה!
-                  </Text>
-                </View>
-              </View>
-            </PressableScale>
-          );
-        })}
-      </View>
-
-      <View style={{ marginTop: 12 }}>
-        <Button label="🤝 תיקו (+1 לכל קבוצה)" variant="secondary" onPress={onDraw} />
-      </View>
-
-      {gameState.waiting.length > 0 && (
-        <View
-          style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}
-        >
-          <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: "center", marginBottom: 8 }}>
-            ממתינות לשחק
-          </Text>
-          <View style={{ flexDirection: "row-reverse", justifyContent: "center", gap: 8 }}>
-            {gameState.waiting.map((letter) => {
-              const cfg = cfgFor(letter);
-              return (
-                <View
-                  key={letter}
-                  style={{
-                    backgroundColor: cfg.bg,
-                    borderColor: cfg.border,
-                    borderWidth: 1,
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                  }}
-                >
-                  <Text style={{ color: cfg.text, fontWeight: "700", fontSize: 12 }}>
-                    קבוצה {cfg.name}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-    </Card>
   );
 }
